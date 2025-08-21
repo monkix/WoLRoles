@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WoL Interactive SOP Dashboard</title>
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: The SPA is structured around the central "Flywheel Framework" as an interactive navigator. Below this strategic overview, a dynamic "Process Explorer" allows users to filter the 11 core SOPs by either Role or Job. This is followed by an interactive "Dependency Matrix" to visualize cross-functional connections. This structure was chosen to guide the user from high-level strategy down to specific operational details in a non-linear, intuitive way, which is more effective for learning and reference than a static document. -->
+    <!-- Visualization & Content Choices: Flywheel Framework -> Goal: Organize -> Viz: Interactive HTML/CSS Diagram -> Interaction: Click to filter processes. Role Involvement -> Goal: Compare -> Viz: Bar Chart -> Library: Chart.js. Dependency Matrix -> Goal: Relationships -> Viz: HTML Table -> Interaction: JS hover highlights. SOP Details -> Goal: Inform -> Viz: Accordion Cards -> Interaction: JS filtering and toggling. These choices prioritize interactivity and clarity, translating the report's structure into an explorable experience without using SVG or Mermaid JS. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f8f7f4; /* Warm Neutral */
+            color: #4a4a4a;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 500px;
+        }
+        .flywheel-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            width: 100%;
+            padding-top: 100%; /* 1:1 Aspect Ratio */
+        }
+        .flywheel-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30%;
+            height: 30%;
+        }
+        .flywheel-step {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 35%;
+            height: 35%;
+            margin-top: -17.5%;
+            margin-left: -17.5%;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+        .flywheel-step:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .step-1 { transform: rotate(0deg) translate(120%) rotate(0deg); }
+        .step-2 { transform: rotate(72deg) translate(120%) rotate(-72deg); }
+        .step-3 { transform: rotate(144deg) translate(120%) rotate(-144deg); }
+        .step-4 { transform: rotate(216deg) translate(120%) rotate(-216deg); }
+        .step-5 { transform: rotate(288deg) translate(120%) rotate(-288deg); }
+        .arrow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: center;
+            color: #a0aec0;
+        }
+        .arrow-1 { transform: translate(-50%, -50%) rotate(36deg); }
+        .arrow-2 { transform: translate(-50%, -50%) rotate(108deg); }
+        .arrow-3 { transform: translate(-50%, -50%) rotate(180deg); }
+        .arrow-4 { transform: translate(-50%, -50%) rotate(252deg); }
+        .arrow-5 { transform: translate(-50%, -50%) rotate(324deg); }
+        .sop-card-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .sop-card.open .sop-card-details {
+            max-height: 1000px; /* Large enough to fit content */
+        }
+        .matrix-highlight {
+            background-color: #fde68a; /* Subtle Yellow Highlight */
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border-left-color: #3498db;
+            animation: spin 1s ease infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto p-4 md:p-8">
+
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-[#2c3e50]">Interactive SOP Dashboard</h1>
+            <p class="text-lg text-[#7f8c8d] mt-2">คู่มือปฏิบัติงานสำหรับทีม WoL</p>
+        </header>
+
+        <section id="flywheel-section" class="mb-16 bg-white p-6 rounded-2xl shadow-lg">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-[#2c3e50] mb-2">The Flywheel Framework</h2>
+            <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">
+                หัวใจของกระบวนการทำงานของเราคือ Flywheel Framework ซึ่งเป็นวงจรที่แต่ละขั้นตอนจะส่งต่อพลังงานและสร้างแรงขับเคลื่อนให้แก่กัน คลิกที่ขั้นตอนเพื่อกรองกระบวนการที่เกี่ยวข้อง
+            </p>
+            <div class="max-w-xl mx-auto relative">
+                <div class="flywheel-container">
+                    <div class="flywheel-center bg-[#2c3e50] rounded-full flex items-center justify-center text-white text-center p-4">
+                        <span class="font-bold text-sm md:text-lg">WoL Core Strategy</span>
+                    </div>
+
+                    <div class="flywheel-step step-1 bg-[#1abc9c] text-white rounded-full flex flex-col items-center justify-center text-center p-2 shadow-md" data-flywheel="1">
+                        <span class="font-bold text-xs md:text-sm">1. Better Solution</span>
+                        <span class="hidden md:block text-xs mt-1">สร้างสรรค์โซลูชัน</span>
+                    </div>
+                    <div class="flywheel-step step-2 bg-[#3498db] text-white rounded-full flex flex-col items-center justify-center text-center p-2 shadow-md" data-flywheel="2">
+                        <span class="font-bold text-xs md:text-sm">2. Beyond Expectation</span>
+                        <span class="hidden md:block text-xs mt-1">ส่งมอบเหนือความคาดหมาย</span>
+                    </div>
+                    <div class="flywheel-step step-3 bg-[#9b59b6] text-white rounded-full flex flex-col items-center justify-center text-center p-2 shadow-md" data-flywheel="3">
+                        <span class="font-bold text-xs md:text-sm">3. Client Share</span>
+                        <span class="hidden md:block text-xs mt-1">ลูกค้าบอกต่อ</span>
+                    </div>
+                    <div class="flywheel-step step-4 bg-[#e67e22] text-white rounded-full flex flex-col items-center justify-center text-center p-2 shadow-md" data-flywheel="4">
+                        <span class="font-bold text-xs md:text-sm">4. Make Trust</span>
+                        <span class="hidden md:block text-xs mt-1">สร้างความน่าเชื่อถือ</span>
+                    </div>
+                    <div class="flywheel-step step-5 bg-[#e74c3c] text-white rounded-full flex flex-col items-center justify-center text-center p-2 shadow-md" data-flywheel="5">
+                        <span class="font-bold text-xs md:text-sm">5. Attract Challenge</span>
+                        <span class="hidden md:block text-xs mt-1">ดึงดูดโจทย์ท้าทาย</span>
+                    </div>
+
+                    <div class="arrow arrow-1 text-3xl" style="transform: translate(-50%, -50%) rotate(36deg) translate(120%);">➔</div>
+                    <div class="arrow arrow-2 text-3xl" style="transform: translate(-50%, -50%) rotate(108deg) translate(120%);">➔</div>
+                    <div class="arrow arrow-3 text-3xl" style="transform: translate(-50%, -50%) rotate(180deg) translate(120%);">➔</div>
+                    <div class="arrow arrow-4 text-3xl" style="transform: translate(-50%, -50%) rotate(252deg) translate(120%);">➔</div>
+                    <div class="arrow arrow-5 text-3xl" style="transform: translate(-50%, -50%) rotate(324deg) translate(120%);">➔</div>
+                </div>
+            </div>
+        </section>
+
+        <section id="process-explorer" class="mb-16">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-[#2c3e50] mb-8">Process Explorer</h2>
+            <div class="bg-white p-6 rounded-2xl shadow-lg">
+                <div class="flex flex-wrap justify-center gap-2 mb-8">
+                    <button class="filter-btn bg-[#34495e] text-white py-2 px-4 rounded-full" data-filter-type="role" data-filter-value="all">All Roles</button>
+                    <!-- Role filter buttons will be inserted here by JS -->
+                </div>
+                <div id="sop-container" class="space-y-4">
+                    <!-- SOP cards will be inserted here by JS -->
+                </div>
+            </div>
+        </section>
+
+        <section id="role-involvement" class="mb-16">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-[#2c3e50] mb-8">Role Involvement Across Processes</h2>
+             <div class="bg-white p-6 rounded-2xl shadow-lg">
+                <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">
+                    แผนภูมินี้แสดงจำนวนกระบวนการหลัก (Jobs) ที่แต่ละบทบาทมีส่วนร่วม เพื่อให้เห็นภาพรวมความรับผิดชอบและความสำคัญของแต่ละตำแหน่งในองค์กร
+                </p>
+                <div class="chart-container">
+                    <canvas id="roleInvolvementChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section id="dependency-matrix" class="mb-16">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-[#2c3e50] mb-8">Cross-Functional Dependency Matrix</h2>
+            <div class="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
+                 <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">
+                    เมทริกซ์นี้แสดงความสัมพันธ์และการส่งต่องานระหว่างบทบาทต่างๆ ลองวางเมาส์เหนือชื่อบทบาทเพื่อดูการเชื่อมโยง
+                </p>
+                <table id="matrix-table" class="w-full text-sm text-left text-gray-500 border-collapse">
+                    <!-- Matrix will be inserted here by JS -->
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sopData = [
+                { id: 1, title: 'SOP 1: Insight Discovery & Strategic', flywheel: [1], roles: ['Director'], objective: 'เพื่อกำหนดทิศทางของโครงการตั้งแต่เริ่มต้น โดยการทำความเข้าใจปัญหาของลูกค้า วิเคราะห์กลุ่มเป้าหมาย และค้นหาโอกาสในการสร้างโครงการใหม่ๆ', steps: ['วิเคราะห์และสำรวจตลาด', 'นัดหมายและทำความเข้าใจโจทย์', 'รวบรวมข้อมูลเชิงลึก', 'สรุปปัญหาและนำเสนอแนวคิด'] },
+                { id: 2, title: 'SOP 2: Planning & Coordination', flywheel: [1, 2], roles: ['Project Manager', 'Director'], objective: 'เพื่อกำหนดแผนงานและ Timeline ของโครงการ รวมถึงบทบาทของทีมให้ชัดเจนและติดตามความคืบหน้าอย่างสม่ำเสมอ', steps: ['จัดทำแผนงานและกำหนด Timeline', 'ประสานงานภายในทีม', 'ประสานงานกับผู้เกี่ยวข้องภายนอก', 'รายงานผลและบันทึกข้อเสนอแนะ'] },
+                { id: 3, title: 'SOP 3: Learning Design & Direction', flywheel: [1], roles: ['Director', 'Project Manager'], objective: 'เพื่อแปลง Insight ที่ได้มาให้เป็นแนวทางในการออกแบบการเรียนรู้ที่ชัดเจนและน่าสนใจ', steps: ['พูดคุยเพื่อทำความเข้าใจโจทย์', 'กำหนด Learning Objective', 'สร้าง Deck นำเสนอ', 'นำเสนอแนวทางกับลูกค้า'] },
+                { id: 4, title: 'SOP 4: Game Design + Product', flywheel: [1, 2], roles: ['Designer', 'Project Manager'], objective: 'เพื่อออกแบบสื่อการเรียนรู้ในรูปแบบเกมให้สอดคล้องกับเป้าหมายการเรียนรู้ที่วางไว้', steps: ['ออกแบบแนวคิดและเนื้อหา', 'ออกแบบกลไกและภาพ', 'ประสานงานกับนักวาด', 'จัดทำ Rulebook', 'ปรับแก้ให้ตอบโจทย์'] },
+                { id: 5, title: 'SOP 5: Workshop & Learning Events', flywheel: [1], roles: ['Activity', 'Project Manager'], objective: 'เพื่อจัดกิจกรรมการเรียนรู้ให้เกิดขึ้นจริงอย่างราบรื่นและได้ผลตามเป้าหมาย', steps: ['วางแผนและเตรียมความพร้อม', 'ประสานงานโลจิสติกส์', 'เตรียมทีม Facilitator', 'ผลิตและดำเนินการกิจกรรม', 'เก็บข้อมูล'] },
+                { id: 6, title: 'SOP 6: Evaluation & Research', flywheel: [1, 2], roles: ['Researcher'], objective: 'เพื่อเก็บรวบรวม วิเคราะห์ และสรุปผลลัพธ์การเรียนรู้ที่เกิดขึ้นอย่างเป็นระบบ', steps: ['ออกแบบเครื่องมือ', 'เก็บข้อมูลภาคสนาม', 'วิเคราะห์และสรุปผล', 'จัดทำรายงาน'] },
+                { id: 7, title: 'SOP 7: Production & Delivery', flywheel: [1], roles: ['Project Manager'], objective: 'เพื่อแปลงไฟล์งานออกแบบให้เป็นผลิตภัณฑ์ที่จับต้องได้และส่งมอบถึงมือลูกค้าอย่างสมบูรณ์แบบ', steps: ['ตรวจสอบและรวบรวมไฟล์', 'ประสานงานการผลิต', 'ควบคุมคุณภาพ', 'จัดส่งและสรุปรายงาน'] },
+                { id: 8, title: 'SOP 8: Support & Ecosystem Development', flywheel: [2, 3], roles: ['Media', 'Activity', 'Director', 'Designer'], objective: 'เพื่อสร้างความยั่งยืนให้กับผลิตภัณฑ์และขยายผลกระทบในระยะยาว', steps: ['สร้างสื่อสนับสนุน', 'เผยแพร่และประชาสัมพันธ์', 'ติดตามและขยายผล', 'สร้างการมีส่วนร่วม'] },
+                { id: 9, title: 'SOP 9: Communicate Value', flywheel: [4, 5], roles: ['Sale'], objective: 'เพื่อสร้างความน่าเชื่อถือในตลาดและดึงดูดโจทย์ที่ท้าทายใหม่ๆ เข้ามา', steps: ['สร้างตัวตนในวงการ', 'นำเสนอคุณค่า', 'สร้างโอกาสทางธุรกิจ'] },
+                { id: 10, title: 'SOP 10: Customer Service', flywheel: [4], roles: ['Admin'], objective: 'เพื่อดูแลและจัดการช่องทางการติดต่อของลูกค้าอย่างเป็นระบบ', steps: ['จัดการช่องทางติดต่อ', 'จัดทำเอกสารการเงิน', 'ประสานงานด้านเอกสาร', 'รวบรวมเอกสารบัญชี'] },
+                { id: 11, title: 'SOP 11: Store + Sell Product', flywheel: [1], roles: ['Stock'], objective: 'เพื่อจัดการกระบวนการรับออร์เดอร์และจัดส่งสินค้าได้อย่างมีประสิทธิภาพ', steps: ['รับออร์เดอร์', 'จัดการคลังสินค้า', 'จัดส่ง'] }
+            ];
+
+            const sopContainer = document.getElementById('sop-container');
+            const filterBtnContainer = document.querySelector('.flex.flex-wrap.justify-center.gap-2');
+            const flywheelSteps = document.querySelectorAll('.flywheel-step');
+
+            const allRoles = [...new Set(sopData.flatMap(sop => sop.roles))];
+            let currentFilter = { type: 'role', value: 'all' };
+
+            const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=`;
+            const geminiTtsApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=`;
+            const retryDelay = 2000;
+
+            async function fetchWithRetry(url, options, retries = 3) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429 && retries > 0) {
+                        await new Promise(res => setTimeout(res, retryDelay));
+                        return fetchWithRetry(url, options, retries - 1);
+                    }
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (retries > 0) {
+                        await new Promise(res => setTimeout(res, retryDelay));
+                        return fetchWithRetry(url, options, retries - 1);
+                    }
+                    throw error;
+                }
+            }
+            
+            async function callGeminiText(sop) {
+                const spinnerId = `spinner-text-${sop.id}`;
+                const outputId = `llm-output-text-${sop.id}`;
+                document.getElementById(spinnerId).classList.remove('hidden');
+                document.getElementById(outputId).textContent = '';
+                
+                const prompt = `เขียนคำอธิบาย SOP ในชีวิตจริง สำหรับตำแหน่ง ${sop.roles.join(', ')} ในบริษัท WoL (World of Learning) สำหรับหัวข้อ "${sop.title}" โดยอธิบายขั้นตอนเหล่านี้เป็นเรื่องราวว่าต้องทำอะไรบ้างในแต่ละวัน: ${sop.steps.join(', ')}`;
+                
+                try {
+                    const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                    const payload = { contents: chatHistory };
+                    const response = await fetchWithRetry(geminiApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        document.getElementById(outputId).textContent = text;
+                    } else {
+                        document.getElementById(outputId).textContent = 'เกิดข้อผิดพลาดในการสร้างคำอธิบาย โปรดลองใหม่อีกครั้ง';
+                    }
+                } catch (error) {
+                    console.error("Error generating text:", error);
+                    document.getElementById(outputId).textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ โปรดลองใหม่อีกครั้ง';
+                } finally {
+                    document.getElementById(spinnerId).classList.add('hidden');
+                }
+            }
+
+            async function callGeminiTTS(sop) {
+                const spinnerId = `spinner-tts-${sop.id}`;
+                const audioId = `tts-audio-${sop.id}`;
+                document.getElementById(spinnerId).classList.remove('hidden');
+                document.getElementById(audioId).classList.add('hidden');
+                
+                const textToSpeak = `วัตถุประสงค์คือ ${sop.objective} และมีขั้นตอนการปฏิบัติงานดังนี้ ${sop.steps.join(' และ ')}`;
+                
+                try {
+                    const payload = {
+                        contents: [{ parts: [{ text: textToSpeak }] }],
+                        generationConfig: {
+                            responseModalities: ["AUDIO"],
+                            speechConfig: {
+                                voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } }
+                            }
+                        },
+                        model: "gemini-2.5-flash-preview-tts"
+                    };
+                    
+                    const response = await fetchWithRetry(geminiTtsApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const result = await response.json();
+                    const part = result?.candidates?.[0]?.content?.parts?.[0];
+                    const audioData = part?.inlineData?.data;
+                    const mimeType = part?.inlineData?.mimeType;
+
+                    if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                        const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                        if (sampleRateMatch) {
+                            const sampleRate = parseInt(sampleRateMatch[1], 10);
+                            const pcmData = base64ToArrayBuffer(audioData);
+                            const pcm16 = new Int16Array(pcmData);
+                            const wavBlob = pcmToWav(pcm16, sampleRate);
+                            const audioUrl = URL.createObjectURL(wavBlob);
+                            document.getElementById(audioId).src = audioUrl;
+                            document.getElementById(audioId).classList.remove('hidden');
+                            document.getElementById(audioId).play();
+                        }
+                    } else {
+                        throw new Error('TTS data not found');
+                    }
+                } catch (error) {
+                    console.error("Error generating TTS:", error);
+                    alert('เกิดข้อผิดพลาดในการสร้างเสียงพูด');
+                } finally {
+                    document.getElementById(spinnerId).classList.add('hidden');
+                }
+            }
+
+            const base64ToArrayBuffer = (base64) => {
+                const binaryString = atob(base64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes.buffer;
+            };
+
+            const pcmToWav = (pcm16, sampleRate) => {
+                const numChannels = 1;
+                const bytesPerSample = 2;
+                const blockAlign = numChannels * bytesPerSample;
+                const byteRate = sampleRate * blockAlign;
+                const dataSize = pcm16.length * bytesPerSample;
+                const buffer = new ArrayBuffer(44 + dataSize);
+                const view = new DataView(buffer);
+                const writeString = (view, offset, string) => {
+                    for (let i = 0; i < string.length; i++) {
+                        view.setUint8(offset + i, string.charCodeAt(i));
+                    }
+                };
+                writeString(view, 0, 'RIFF');
+                view.setUint32(4, 36 + dataSize, true);
+                writeString(view, 8, 'WAVE');
+                writeString(view, 12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, 1, true);
+                view.setUint16(22, numChannels, true);
+                view.setUint32(24, sampleRate, true);
+                view.setUint32(28, byteRate, true);
+                view.setUint16(32, blockAlign, true);
+                view.setUint16(34, 16, true);
+                writeString(view, 36, 'data');
+                view.setUint32(40, dataSize, true);
+                for (let i = 0; i < pcm16.length; i++) {
+                    view.setInt16(44 + i * bytesPerSample, pcm16[i], true);
+                }
+                return new Blob([view], { type: 'audio/wav' });
+            };
+
+            function renderSopCards() {
+                sopContainer.innerHTML = '';
+                const filteredSops = sopData.filter(sop => {
+                    if (currentFilter.value === 'all') return true;
+                    if (currentFilter.type === 'role') {
+                        return sop.roles.includes(currentFilter.value);
+                    }
+                    if (currentFilter.type === 'flywheel') {
+                        return sop.flywheel.includes(parseInt(currentFilter.value));
+                    }
+                    return false;
+                });
+
+                if (filteredSops.length === 0) {
+                    sopContainer.innerHTML = `<p class="text-center text-gray-500">ไม่พบกระบวนการที่ตรงกับเงื่อนไข</p>`;
+                    return;
+                }
+
+                filteredSops.forEach(sop => {
+                    const card = document.createElement('div');
+                    card.className = 'sop-card bg-gray-50 border border-gray-200 rounded-lg p-4 transition-shadow duration-300 hover:shadow-md';
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center cursor-pointer" onclick="toggleAccordion(this)">
+                            <h3 class="text-lg font-semibold text-[#34495e]">${sop.title}</h3>
+                            <span class="text-2xl text-gray-400 transform transition-transform duration-300">+</span>
+                        </div>
+                        <div class="sop-card-details mt-4 border-t pt-4">
+                            <p class="font-medium text-gray-700">วัตถุประสงค์:</p>
+                            <p class="mb-4 text-gray-600">${sop.objective}</p>
+                            <p class="font-medium text-gray-700">ขั้นตอนการปฏิบัติงาน:</p>
+                            <ol class="list-decimal list-inside text-gray-600 space-y-1">
+                                ${sop.steps.map(step => `<li>${step}</li>`).join('')}
+                            </ol>
+                            <div class="mt-4">
+                                <span class="font-medium text-gray-700">ผู้รับผิดชอบ:</span>
+                                ${sop.roles.map(role => `<span class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">${role}</span>`).join('')}
+                            </div>
+                            <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4 mt-8">
+                                <button class="filter-btn bg-white text-gray-700 py-2 px-4 rounded-full border hover:bg-gray-100" onclick="callGeminiText(${sop.id})">สร้างคำอธิบายงานแบบละเอียด ✨</button>
+                                <button class="filter-btn bg-white text-gray-700 py-2 px-4 rounded-full border hover:bg-gray-100" onclick="callGeminiTTS(${sop.id})">ฟังคำอธิบายงาน ✨</button>
+                            </div>
+                            <div class="mt-4">
+                                <div id="spinner-text-${sop.id}" class="spinner hidden"></div>
+                                <p id="llm-output-text-${sop.id}" class="text-sm mt-2 whitespace-pre-wrap"></p>
+                                <div id="spinner-tts-${sop.id}" class="spinner hidden"></div>
+                                <audio id="tts-audio-${sop.id}" controls class="hidden"></audio>
+                            </div>
+                        </div>
+                    `;
+                    sopContainer.appendChild(card);
+                });
+            }
+
+            window.callGeminiText = (sopId) => {
+                const sop = sopData.find(s => s.id === sopId);
+                if (sop) {
+                    callGeminiText(sop);
+                }
+            };
+
+            window.callGeminiTTS = (sopId) => {
+                const sop = sopData.find(s => s.id === sopId);
+                if (sop) {
+                    callGeminiTTS(sop);
+                }
+            };
+
+            window.toggleAccordion = function(element) {
+                const card = element.closest('.sop-card');
+                card.classList.toggle('open');
+                const icon = element.querySelector('span');
+                icon.textContent = card.classList.contains('open') ? '-' : '+';
+                icon.classList.toggle('rotate-45');
+            }
+
+            function setupFilters() {
+                allRoles.forEach(role => {
+                    const button = document.createElement('button');
+                    button.className = 'filter-btn bg-white text-gray-700 py-2 px-4 rounded-full border hover:bg-gray-100';
+                    button.dataset.filterType = 'role';
+                    button.dataset.filterValue = role;
+                    button.textContent = role;
+                    filterBtnContainer.appendChild(button);
+                });
+
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        currentFilter.type = btn.dataset.filterType;
+                        currentFilter.value = btn.dataset.filterValue;
+                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-[#34495e]', 'text-white'));
+                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.add('bg-white', 'text-gray-700'));
+                        btn.classList.add('bg-[#34495e]', 'text-white');
+                        btn.classList.remove('bg-white', 'text-gray-700');
+                        flywheelSteps.forEach(s => s.classList.remove('ring-4', 'ring-offset-2', 'ring-yellow-400'));
+                        renderSopCards();
+                    });
+                });
+
+                flywheelSteps.forEach(step => {
+                    step.addEventListener('click', () => {
+                        currentFilter.type = 'flywheel';
+                        currentFilter.value = step.dataset.flywheel;
+                        flywheelSteps.forEach(s => s.classList.remove('ring-4', 'ring-offset-2', 'ring-yellow-400'));
+                        step.classList.add('ring-4', 'ring-offset-2', 'ring-yellow-400');
+                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-[#34495e]', 'text-white'));
+                        document.querySelector('[data-filter-value="all"]').classList.add('bg-[#34495e]', 'text-white');
+                        renderSopCards();
+                    });
+                });
+            }
+
+            function setupRoleInvolvementChart() {
+                const roleCounts = {};
+                allRoles.forEach(role => roleCounts[role] = 0);
+                sopData.forEach(sop => {
+                    sop.roles.forEach(role => {
+                        roleCounts[role]++;
+                    });
+                });
+
+                const ctx = document.getElementById('roleInvolvementChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(roleCounts),
+                        datasets: [{
+                            label: 'จำนวนกระบวนการที่เกี่ยวข้อง',
+                            data: Object.values(roleCounts),
+                            backgroundColor: '#3498db',
+                            borderColor: '#2980b9',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(tooltipItems) {
+                                        let label = tooltipItems[0].label;
+                                        return Array.isArray(label) ? label.join(' ') : label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function setupDependencyMatrix() {
+                const matrixTable = document.getElementById('matrix-table');
+                const roles = ['Director', 'Project Manager', 'Designer', 'Activity', 'Researcher', 'Media', 'Sale'];
+                const matrixData = {
+                    'Director': { 'Project Manager': 'ส่งต่อ', 'Sale': 'รับ' },
+                    'Project Manager': { 'Director': 'รับ', 'Designer': 'ส่งต่อ', 'Activity': 'ส่งต่อ' },
+                    'Designer': { 'Director': 'รับ', 'Project Manager': 'ส่งต่อ', 'Researcher': 'รับ' },
+                    'Activity': { 'Director': 'รับ', 'Project Manager': 'รับ', 'Researcher': 'ส่งต่อ', 'Media': 'ส่งต่อ' },
+                    'Researcher': { 'Activity': 'รับ' },
+                    'Media': { 'Director': 'รับ', 'Activity': 'รับ' },
+                    'Sale': { 'Director': 'รับ' }
+                };
+
+                let headerHtml = '<thead><tr class="text-xs text-gray-700 uppercase bg-gray-100"><th scope="col" class="px-6 py-3">บทบาท/งาน</th>';
+                roles.forEach(role => {
+                    headerHtml += `<th scope="col" class="px-6 py-3" data-role-col="${role}">${role}</th>`;
+                });
+                headerHtml += '</tr></thead>';
+
+                let bodyHtml = '<tbody>';
+                roles.forEach(rowRole => {
+                    bodyHtml += `<tr class="bg-white border-b"><th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap" data-role-row="${rowRole}">${rowRole}</th>`;
+                    roles.forEach(colRole => {
+                        const interaction = matrixData[rowRole] ? (matrixData[rowRole][colRole] || '-') : '-';
+                        let cellClass = '';
+                        if (interaction === 'ส่งต่อ') cellClass = 'text-green-600 font-semibold';
+                        if (interaction === 'รับ') cellClass = 'text-blue-600 font-semibold';
+                        bodyHtml += `<td class="px-6 py-4 ${cellClass}" data-role-cell="${rowRole}-${colRole}">${interaction}</td>`;
+                    });
+                    bodyHtml += '</tr>';
+                });
+                bodyHtml += '</tbody>';
+
+                matrixTable.innerHTML = headerHtml + bodyHtml;
+
+                const headers = matrixTable.querySelectorAll('th[data-role-col], th[data-role-row]');
+                headers.forEach(th => {
+                    th.addEventListener('mouseover', (e) => {
+                        const role = e.target.dataset.roleCol || e.target.dataset.roleRow;
+                        matrixTable.querySelectorAll(`[data-role-col="${role}"], [data-role-row="${role}"]`).forEach(el => el.classList.add('matrix-highlight'));
+                    });
+                    th.addEventListener('mouseout', () => {
+                        matrixTable.querySelectorAll('.matrix-highlight').forEach(el => el.classList.remove('matrix-highlight'));
+                    });
+                });
+            }
+
+            setupFilters();
+            renderSopCards();
+            setupRoleInvolvementChart();
+            setupDependencyMatrix();
+        });
+    </script>
+</body>
+</html>
