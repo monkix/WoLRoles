@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แบบสอบถามความเหมาะสมกับบทบาทงาน WoL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #F7FFF7;
+        }
+        .container-card {
+            background-color: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 2rem;
+        }
+        .button-primary {
+            background-color: #4ECDC4;
+            color: #1A535C;
+            padding: 0.75rem 2rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: transform 0.2s ease-in-out;
+        }
+        .button-primary:hover {
+            transform: scale(1.05);
+            background-color: #3BB7B0;
+        }
+        .option-card {
+            background-color: #F7FFF7;
+            border: 2px solid #E2E8F0;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: border-color 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+        .option-card:hover {
+            transform: translateY(-4px);
+            border-color: #FF6B6B;
+        }
+        .option-card.selected {
+            background-color: #FFE66D;
+            border-color: #FF6B6B;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #4ECDC4;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 md:p-8">
+
+    <div id="app-container" class="w-full max-w-2xl text-center">
+
+        <h1 class="text-4xl md:text-5xl font-bold text-[#1A535C] mb-4">ค้นหาบทบาทที่ใช่กับ WoL</h1>
+        <p class="text-lg text-gray-600 mb-8">ตอบคำถามสั้นๆ เพื่อหาว่าคุณเหมาะสมกับบทบาทไหนในทีมของเรา</p>
+        
+        <div id="questionnaire-container" class="container-card">
+
+            <div id="questions-list"></div>
+
+            <div id="controls" class="flex justify-between mt-8">
+                <button id="prev-btn" class="button-primary" style="display: none;">ย้อนกลับ</button>
+                <button id="next-btn" class="button-primary mx-auto">ถัดไป</button>
+                <button id="submit-btn" class="button-primary" style="display: none;">ดูผลลัพธ์</button>
+            </div>
+            
+        </div>
+
+        <div id="results-container" class="container-card mt-8 hidden">
+            <h2 class="text-3xl font-bold text-[#1A535C] mb-4">ผลลัพธ์: บทบาทที่แนะนำสำหรับคุณ</h2>
+            <div id="recommended-role-content" class="text-left text-gray-700 mb-6"></div>
+            <div class="w-full h-64 mx-auto">
+                 <canvas id="scoresChart"></canvas>
+            </div>
+            <div class="mt-4 text-center">
+                <p id="fit-score-explanation" class="text-sm text-gray-600 italic"></p>
+            </div>
+            <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4 mt-8">
+                <button id="gemini-details-btn" class="button-primary">รับคำอธิบายงานแบบละเอียด ✨</button>
+                <button id="gemini-tts-btn" class="button-primary">ฟังคำอธิบายงาน ✨</button>
+            </div>
+            <div id="llm-output-container" class="mt-8 text-left text-gray-700">
+                <div id="loading-spinner-llm" class="mx-auto spinner hidden"></div>
+                <div id="llm-output-content"></div>
+                <div id="loading-spinner-tts" class="mx-auto spinner hidden"></div>
+                <audio id="tts-audio" controls class="hidden"></audio>
+            </div>
+            <button id="restart-btn" class="button-primary mx-auto mt-8">ทำแบบสอบถามอีกครั้ง</button>
+        </div>
+
+    </div>
+
+    <script>
+        const energeticPlayfulPalette = {
+            primary: '#1A535C', 
+            secondary: '#4ECDC4',
+            accent: '#FF6B6B',
+            neutral: '#FFE66D',
+            light: '#F7FFF7',
+            extra: '#FFC4D0'
+        };
+
+        const questions = [
+            {
+                question: 'คุณชอบทำงานแบบไหนมากที่สุด?',
+                options: [
+                    { text: 'คิดวิเคราะห์และวางแผนกลยุทธ์จากข้อมูล', role: 'Director', score: 3 },
+                    { text: 'จัดการโปรเจกต์และประสานงานกับทุกคน', role: 'Project Manager', score: 3 },
+                    { text: 'ลงมือสร้างสรรค์และออกแบบชิ้นงาน', role: 'Designer', score: 3 },
+                    { text: 'จัดกิจกรรมและสร้างประสบการณ์ให้กับคนอื่น', role: 'Activity', score: 3 },
+                ]
+            },
+            {
+                question: 'เมื่อเจอโจทย์ที่ซับซ้อน คุณจะทำอย่างไร?',
+                options: [
+                    { text: 'ใช้เวลาวิจัยและหาข้อมูลเชิงลึกก่อนตัดสินใจ', role: 'Researcher', score: 3 },
+                    { text: 'วางแผนงานเป็นขั้นตอนและกำหนด Timeline ให้ชัดเจน', role: 'Project Manager', score: 2 },
+                    { text: 'มองหาโอกาสทางธุรกิจและช่องทางในการสื่อสาร', role: 'Sale', score: 2 },
+                    { text: 'หาวิธีทำให้มันง่ายขึ้นด้วยการจัดการข้อมูล', role: 'Admin', score: 1 },
+                ]
+            },
+            {
+                question: 'คุณมีทักษะด้านไหนที่โดดเด่น?',
+                options: [
+                    { text: 'การสื่อสารและสร้างความสัมพันธ์ที่ดีกับคนอื่น', role: 'Sale', score: 3 },
+                    { text: 'การบริหารจัดการและติดตามงานอย่างเป็นระบบ', role: 'Project Manager', score: 3 },
+                    { text: 'ความละเอียดรอบคอบในการตรวจสอบและเก็บข้อมูล', role: 'Researcher', score: 2 },
+                    { text: 'ความคิดสร้างสรรค์และการออกแบบสิ่งใหม่ๆ', role: 'Designer', score: 2 },
+                ]
+            },
+             {
+                question: 'คุณมองว่าส่วนไหนของธุรกิจที่สำคัญที่สุด?',
+                options: [
+                    { text: 'การนำเสนอคุณค่าของสินค้าและบริการให้ตลาดรับรู้', role: 'Sale', score: 2 },
+                    { text: 'การผลิตและจัดการสินค้าให้มีคุณภาพดีและพร้อมส่ง', role: 'Stock', score: 2 },
+                    { text: 'การทำวิจัยและพัฒนาเพื่อหาโซลูชันใหม่ๆ', role: 'Researcher', score: 3 },
+                    { text: 'การจัดการข้อมูลและเอกสารต่างๆ ให้เป็นระเบียบ', role: 'Admin', score: 3 },
+                ]
+            },
+            {
+                question: 'คุณชอบทำงานกับสื่อแบบไหน?',
+                options: [
+                    { text: 'ชอบทำงานกับสื่อที่ต้องใช้ความคิดสร้างสรรค์ เช่น การออกแบบ Graphic', role: 'Designer', score: 3 },
+                    { text: 'ชอบทำงานกับสื่อที่เป็นข้อมูลและตัวเลข เช่น การวิเคราะห์ผลวิจัย', role: 'Researcher', score: 2 },
+                    { text: 'ชอบทำงานกับสื่อที่เป็นภาพนิ่งและวิดีโอเพื่อการตลาด', role: 'Media', score: 3 },
+                    { text: 'ชอบสื่อสารผ่านช่องทางต่างๆ เช่น การทำ Social Media', role: 'Admin', score: 2 },
+                ]
+            },
+            {
+                question: 'คุณชอบดูแลลูกค้าแบบไหน?',
+                options: [
+                    { text: 'ชอบแก้ปัญหาและตอบคำถามที่ลูกค้าสอบถามเข้ามา', role: 'Admin', score: 3 },
+                    { text: 'ชอบสร้างความสัมพันธ์และนำเสนอสิ่งที่ดีที่สุดให้ลูกค้า', role: 'Sale', score: 3 },
+                    { text: 'ชอบติดตามผลลัพธ์และพัฒนาโซลูชันให้ลูกค้าอย่างต่อเนื่อง', role: 'Project Manager', score: 2 },
+                    { text: 'ชอบจัดกิจกรรมและสร้างประสบการณ์ที่ดีที่สุดให้กับลูกค้า', role: 'Activity', score: 2 },
+                ]
+            },
+        ];
+
+        const roleDescriptions = {
+            'Director': {
+                title: 'Strategic Director',
+                description: 'คุณมีทักษะในการคิดเชิงกลยุทธ์และการวิเคราะห์ขั้นสูง เหมาะกับบทบาทผู้บริหารที่ทำหน้าที่กำหนดทิศทางของโครงการ และขับเคลื่อนทีมให้บรรลุเป้าหมายที่วางไว้'
+            },
+            'Project Manager': {
+                title: 'Project Manager',
+                description: 'คุณมีความสามารถในการจัดการและประสานงานที่ยอดเยี่ยม เหมาะกับบทบาท Project Manager ที่ทำหน้าที่นำทีม จัดการทรัพยากร และติดตามความคืบหน้าของโครงการเพื่อให้สำเร็จตามแผน'
+            },
+            'Designer': {
+                title: 'Learning Designer',
+                description: 'คุณมีความคิดสร้างสรรค์และสายตาในการออกแบบ เหมาะกับบทบาท Designer ที่ทำหน้าที่แปลงแนวคิดให้เป็นผลงานที่จับต้องได้ ไม่ว่าจะเป็น Visual Design หรือ Game Mechanic'
+            },
+            'Activity': {
+                title: 'Activity Facilitator',
+                description: 'คุณมีทักษะในการสื่อสารและสร้างปฏิสัมพันธ์กับผู้คน เหมาะกับบทบาทผู้ดูแลกิจกรรมที่ทำหน้าที่ออกแบบและนำกิจกรรมการเรียนรู้ให้เกิดประสบการณ์ที่ดีที่สุด'
+            },
+            'Researcher': {
+                title: 'Researcher',
+                description: 'คุณมีทักษะด้านการวิจัยและการวิเคราะห์ข้อมูลเชิงลึก เหมาะกับบทบาท Researcher ที่ทำหน้าที่เก็บข้อมูล วิเคราะห์ และสรุปผลลัพธ์เพื่อใช้พัฒนาโครงการต่อไป'
+            },
+            'Media': {
+                title: 'Media Specialist',
+                description: 'คุณมีความสามารถในการผลิตและจัดการสื่อ เหมาะกับบทบาท Media ที่ทำหน้าที่สร้างสรรค์เนื้อหาเพื่อสื่อสารคุณค่าของบริษัทและดึงดูดลูกค้า'
+            },
+            'Sale': {
+                title: 'Sales & Customer Service Representative',
+                description: 'คุณมีทักษะในการสร้างความน่าเชื่อถือและนำเสนอคุณค่า เหมาะกับบทบาท Sales ที่ทำหน้าที่ดูแลลูกค้าและดึงดูดโอกาสทางธุรกิจใหม่ๆ'
+            },
+            'Admin': {
+                title: 'Administrative & Stock Officer',
+                description: 'คุณเป็นคนละเอียดรอบคอบและสามารถจัดการงานเอกสารต่างๆ ได้อย่างเป็นระบบ เหมาะกับบทบาท Admin ที่เป็นฟันเฟืองสำคัญในการขับเคลื่อนการทำงานของทีมให้ราบรื่น'
+            },
+            'Stock': {
+                title: 'Administrative & Stock Officer',
+                description: 'คุณมีความสามารถในการจัดการสินค้าและกระบวนการจัดส่ง เหมาะกับบทบาท Stock Manager ที่ทำหน้าที่ดูแลคลังสินค้าเพื่อให้สินค้าพร้อมจัดส่งถึงลูกค้าได้อย่างมีประสิทธิภาพ'
+            }
+        };
+
+        let currentQuestionIndex = 0;
+        let scores = {
+            'Director': 0, 'Project Manager': 0, 'Designer': 0, 'Activity': 0, 'Researcher': 0,
+            'Media': 0, 'Sale': 0, 'Admin': 0, 'Stock': 0
+        };
+        let selectedOption = null;
+
+        const questionsList = document.getElementById('questions-list');
+        const nextBtn = document.getElementById('next-btn');
+        const prevBtn = document.getElementById('prev-btn');
+        const submitBtn = document.getElementById('submit-btn');
+        const questionnaireContainer = document.getElementById('questionnaire-container');
+        const resultsContainer = document.getElementById('results-container');
+        const recommendedRoleContent = document.getElementById('recommended-role-content');
+        const restartBtn = document.getElementById('restart-btn');
+        const fitScoreExplanation = document.getElementById('fit-score-explanation');
+        const geminiDetailsBtn = document.getElementById('gemini-details-btn');
+        const geminiTtsBtn = document.getElementById('gemini-tts-btn');
+        const llmOutputContainer = document.getElementById('llm-output-container');
+        const llmOutputContent = document.getElementById('llm-output-content');
+        const loadingSpinnerLlm = document.getElementById('loading-spinner-llm');
+        const loadingSpinnerTts = document.getElementById('loading-spinner-tts');
+        const ttsAudio = document.getElementById('tts-audio');
+
+        const showQuestion = () => {
+            const currentQuestion = questions[currentQuestionIndex];
+            questionsList.innerHTML = `
+                <h3 class="text-xl md:text-2xl font-semibold text-[#1A535C] mb-6">${currentQuestion.question}</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${currentQuestion.options.map((option, index) => `
+                        <div class="option-card flex flex-col items-center justify-center text-center" data-role="${option.role}" data-score="${option.score}" data-index="${index}">
+                            <p class="font-medium">${option.text}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            document.querySelectorAll('.option-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    selectedOption = {
+                         role: card.dataset.role,
+                         score: parseInt(card.dataset.score)
+                    };
+                });
+            });
+
+            prevBtn.style.display = currentQuestionIndex > 0 ? 'inline-block' : 'none';
+            nextBtn.style.display = currentQuestionIndex < questions.length - 1 ? 'inline-block' : 'none';
+            submitBtn.style.display = currentQuestionIndex === questions.length - 1 ? 'inline-block' : 'none';
+        };
+
+        const showResults = () => {
+            let maxScore = -1;
+            let recommendedRole = '';
+            for (const role in scores) {
+                if (scores[role] > maxScore) {
+                    maxScore = scores[role];
+                    recommendedRole = role;
+                }
+            }
+
+            const roleInfo = roleDescriptions[recommendedRole];
+            recommendedRoleContent.innerHTML = `
+                <h3 class="text-2xl font-bold text-[#FF6B6B]">${roleInfo.title}</h3>
+                <p class="mt-2 text-gray-700">${roleInfo.description}</p>
+            `;
+
+            questionnaireContainer.classList.add('hidden');
+            resultsContainer.classList.remove('hidden');
+            
+            const scoreLabels = Object.keys(scores);
+            const scoreValues = Object.values(scores);
+            
+            const ctx = document.getElementById('scoresChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: scoreLabels,
+                    datasets: [{
+                        label: 'คะแนนความเหมาะสม',
+                        data: scoreValues,
+                        backgroundColor: chartColors,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            fitScoreExplanation.textContent = 'คะแนนในกราฟแสดงระดับความสอดคล้องระหว่างแนวทางการทำงานของคุณกับบทบาทต่างๆ ในองค์กร ยิ่งคะแนนสูง หมายถึงบทบาทนั้นยิ่งเหมาะสมกับคุณมากที่สุด';
+        };
+        
+        const chartColors = Object.keys(scores).map((_, index) => {
+            const colors = [
+                energeticPlayfulPalette.primary,
+                energeticPlayfulPalette.secondary,
+                energeticPlayfulPalette.accent,
+                energeticPlayfulPalette.neutral,
+                energeticPlayfulPalette.extra,
+                '#A2D2FF', '#BDE0FE', '#FFC8DD', '#CDB4DB'
+            ];
+            return colors[index % colors.length];
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (selectedOption) {
+                scores[selectedOption.role] += selectedOption.score;
+                currentQuestionIndex++;
+                selectedOption = null;
+                showQuestion();
+            } else {
+                alert('กรุณาเลือกคำตอบก่อน');
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentQuestionIndex > 0) {
+                 scores[selectedOption.role] -= selectedOption.score;
+                 currentQuestionIndex--;
+                 selectedOption = null;
+                 showQuestion();
+            }
+        });
+
+        submitBtn.addEventListener('click', () => {
+            if (selectedOption) {
+                 scores[selectedOption.role] += selectedOption.score;
+                 showResults();
+            } else {
+                 alert('กรุณาเลือกคำตอบก่อน');
+            }
+        });
+        
+        restartBtn.addEventListener('click', () => {
+            window.location.reload();
+        });
+
+        geminiDetailsBtn.addEventListener('click', async () => {
+            loadingSpinnerLlm.classList.remove('hidden');
+            const recommendedRole = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
+            const roleTitle = roleDescriptions[recommendedRole].title;
+            const prompt = `เขียนคำอธิบายงานแบบละเอียดสำหรับตำแหน่ง "${roleTitle}" ที่ทำงานในบริษัทสร้างสรรค์ชื่อ WoL (World of Learning) โดยอิงจากข้อมูลต่อไปนี้และขยายความให้เป็นเรื่องราวว่าในแต่ละวันต้องทำอะไรบ้าง: ${roleDescriptions[recommendedRole].description}`;
+            
+            try {
+                const chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = { contents: chatHistory };
+                const apiKey = ""
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    llmOutputContent.innerHTML = `<h4 class="text-xl font-bold text-[#1A535C] mt-4">คำอธิบายงานแบบละเอียดที่สร้างโดย AI</h4><p class="mt-2 whitespace-pre-wrap">${text}</p>`;
+                } else {
+                    llmOutputContent.innerHTML = `<p class="text-red-500">เกิดข้อผิดพลาดในการสร้างคำอธิบายงาน โปรดลองใหม่อีกครั้ง</p>`;
+                }
+            } catch (error) {
+                console.error("Error generating text:", error);
+                llmOutputContent.innerHTML = `<p class="text-red-500">เกิดข้อผิดพลาดในการเชื่อมต่อ โปรดลองใหม่อีกครั้ง</p>`;
+            } finally {
+                loadingSpinnerLlm.classList.add('hidden');
+            }
+        });
+
+        geminiTtsBtn.addEventListener('click', async () => {
+            loadingSpinnerTts.classList.remove('hidden');
+            const recommendedRole = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
+            const roleInfo = roleDescriptions[recommendedRole];
+            const textToSpeak = `บทบาทที่แนะนำสำหรับคุณคือ ${roleInfo.title} ${roleInfo.description}`;
+            
+            try {
+                const payload = {
+                    contents: [{
+                        parts: [{ text: textToSpeak }]
+                    }],
+                    generationConfig: {
+                        responseModalities: ["AUDIO"],
+                        speechConfig: {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: { voiceName: "Kore" }
+                            }
+                        }
+                    },
+                    model: "gemini-2.5-flash-preview-tts"
+                };
+                const apiKey = ""
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                const part = result?.candidates?.[0]?.content?.parts?.[0];
+                const audioData = part?.inlineData?.data;
+                const mimeType = part?.inlineData?.mimeType;
+
+                if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                    const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                    if (sampleRateMatch) {
+                        const sampleRate = parseInt(sampleRateMatch[1], 10);
+                        const pcmData = base64ToArrayBuffer(audioData);
+                        const pcm16 = new Int16Array(pcmData);
+                        const wavBlob = pcmToWav(pcm16, sampleRate);
+                        const audioUrl = URL.createObjectURL(wavBlob);
+                        ttsAudio.src = audioUrl;
+                        ttsAudio.classList.remove('hidden');
+                        ttsAudio.play();
+                    }
+                } else {
+                    alert('เกิดข้อผิดพลาดในการสร้างเสียงพูด');
+                }
+            } catch (error) {
+                console.error("Error generating TTS:", error);
+                alert('เกิดข้อผิดพลาดในการเชื่อมต่อ TTS');
+            } finally {
+                loadingSpinnerTts.classList.add('hidden');
+            }
+        });
+        
+        const base64ToArrayBuffer = (base64) => {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        };
+
+        const pcmToWav = (pcm16, sampleRate) => {
+            const numChannels = 1;
+            const bytesPerSample = 2;
+            const blockAlign = numChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign;
+            const dataSize = pcm16.length * bytesPerSample;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+
+            const writeString = (view, offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+
+            // RIFF chunk
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataSize, true);
+            writeString(view, 8, 'WAVE');
+
+            // fmt chunk
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true); // PCM format
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, byteRate, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, 16, true); // bits per sample
+
+            // data chunk
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataSize, true);
+            for (let i = 0; i < pcm16.length; i++) {
+                view.setInt16(44 + i * bytesPerSample, pcm16[i], true);
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        };
+
+        showQuestion();
+    </script>
+</body>
+</html>
